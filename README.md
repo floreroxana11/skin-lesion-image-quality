@@ -51,6 +51,15 @@ data/raw/
 
 The raw data is excluded from Git.
 
+The project uses a ResNet18 model trained on HAM10000. Download the weights from
+[Hugging Face](https://huggingface.co/miloszkrawczyk/skin-lesion-classifier/resolve/645de358497899dbed2e4ca3ed137305404131f7/resnet.pth?download=true)
+and save them as `models/weights/resnet.pth`. This file is excluded from Git.
+
+Model source:
+[miloszkrawczyk/skin-lesion-classifier](https://huggingface.co/miloszkrawczyk/skin-lesion-classifier).
+The model uses 224 x 224 RGB images and ImageNet normalization.
+Its license is CC BY-NC 4.0 (non-commercial use).
+
 ## Usage
 
 Check the metadata and image inventory:
@@ -61,3 +70,66 @@ Check the metadata and image inventory:
 
 This script checks that the images listed in the metadata are present and shows
 the number of images in each class.
+
+Prepare the image lists for training, validation, and testing:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/prepare_data.py
+```
+
+This saves the image lists in `data/splits.csv`, using the
+[author's split](https://github.com/miloszkrawczyk/melanoma-classifier/blob/b3ed99dc4b370ea97f799f096e0c148bf5d82bdd/src/data.py)
+with seed 42: 6,986 training, 1,521 validation, and 1,508 test images.
+Images of the same lesion stay in the same split.
+
+Check the degradation levels on validation images:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/explore_degradations.py
+```
+
+This selects five images from different lesions in each class, using seed 42.
+It applies the degradations and calculates SSIM, without running the classifier.
+The selected images are listed in `data/validation_selection.csv`.
+The scores, examples, and pairs with SSIM differences of up to 0.01 or 0.02
+are saved in `results/validation/`.
+
+Run on all original test images:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/run_experiments.py
+```
+
+This saves the labels, predictions, confidence, and class probabilities in
+`results/original_predictions.csv`.
+
+Run the 20 degraded variants of each test image:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/run_experiments.py --degraded
+```
+
+This saves 30,160 predictions in `results/degraded_predictions.csv`, together
+with the degradation type, parameter, and SSIM score.
+
+## Image degradations
+
+| Degradation | Parameter | Values |
+| --- | --- | --- |
+| Gaussian blur | Radius in pixels | 0.25, 0.5, 1, 2, 4 |
+| JPEG compression | Quality | 90, 70, 50, 30, 10 |
+| Reduced resolution | Intermediate side length in pixels | 192, 128, 96, 64, 32 |
+| Brightness | Multiplication factor | 0.4, 0.7, 1.2, 1.5, 1.8 |
+
+These values were checked on validation images before being used on test images.
+Each variant is made separately from the original resized to 224 x 224 pixels.
+For reduced resolution, the image is made smaller and then resized back to
+224 x 224. Resizing uses bilinear interpolation. The original files are kept unchanged.
+
+SSIM compares each variant with the resized original before model normalization.
+We use it to find different degradations of the same image with similar scores.
+The main comparison uses a maximum SSIM difference of 0.01, with 0.02 as an
+additional comparison. SSIM measures similarity, not diagnostic correctness.
+
+Reference: Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004).
+[Image Quality Assessment: From Error Visibility to Structural Similarity](https://doi.org/10.1109/TIP.2003.819861).
