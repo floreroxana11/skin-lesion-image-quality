@@ -112,6 +112,91 @@ Run the 20 degraded variants of each test image:
 This saves 30,160 predictions in `results/degraded_predictions.csv`, together
 with the degradation type, parameter, and SSIM score.
 
+Run the same degradations on validation images:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/run_experiments.py --degraded --split validation
+```
+
+This saves 30,420 predictions in `results/validation_degraded_predictions.csv`.
+They are used to train the reliability estimators.
+
+Analyze the saved predictions:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/analyze_results.py
+```
+
+This calculates accuracy, balanced accuracy, Macro-F1, mean confidence, and ECE
+for the originals and each degradation level. ECE compares confidence with
+accuracy in ten confidence groups. Tables and graphs are saved in
+`results/analysis/`, including metrics for each class.
+
+The script also compares different degradations of the same image at similar
+SSIM. For each pair of types, it selects the closest pair of variants within
+0.01 or 0.02 SSIM, using only the scores. The pairs are saved in
+`matched_pairs.csv`. Their accuracy, confidence, ECE, and matching counts are
+saved in `matched_comparison.csv`. Differences are the first type minus the
+second. Each type comparison can contain a different subset of images.
+
+Estimate prediction reliability:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/estimate_reliability.py
+```
+
+This trains logistic regression to estimate whether a ResNet prediction is correct:
+
+| Variant | Inputs |
+| --- | --- |
+| A | SSIM |
+| B | SSIM + degradation type |
+| C | SSIM + ResNet confidence |
+| D | SSIM + degradation type + ResNet confidence |
+| E | ResNet confidence only |
+
+All five variants are trained on validation data and evaluated on the same test
+data. Numeric inputs are standardized using validation data. B is compared with
+A, and D with C, to check whether the degradation type helps. E provides a
+comparison using confidence alone.
+
+The output is an estimated probability of correctness. Higher error AUROC and
+Average Precision are better; lower Brier score is better. Metrics, results by
+class, and estimated probabilities are saved in `results/reliability/`.
+AUROC is left empty for classes without both correct and incorrect predictions;
+Average Precision is left empty when there are no errors.
+
+The script also sets aside the least reliable 10% or 20% of predictions and
+measures accuracy on those remaining. It saves the results in `deferral.csv`,
+results by class in `class_deferral.csv`, and a graph in `deferral.png`.
+Ties use a random order with seed 42. The rule is applied to all predictions
+together, so the percentage set aside can differ between classes.
+
+Variant E, deferral, and class-level analyses were added after examining the
+initial test results and are reported as exploratory analyses.
+
+Calculate confidence intervals for the comparisons:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/bootstrap_results.py
+```
+
+This uses 1,000 bootstrap samples with seed 42. Whole lesions are sampled with
+replacement, keeping their images and variants together. Both sides of each
+comparison use the same sampled lesions. ResNet and the fitted estimators are
+not retrained.
+
+The 95% intervals are saved in `results/bootstrap/`. They cover accuracy and
+confidence differences between matched degradation types, and AUROC, Average
+Precision, and Brier differences for B minus A and D minus C. Positive
+differences are better for AUROC and Average Precision; negative differences
+are better for Brier. The intervals are exploratory and are not adjusted for
+multiple comparisons.
+
+These analysis scripts use saved predictions without running ResNet again.
+The formulas, model settings, and references are in
+[Experimental Methodology](docs/methodology.md).
+
 ## Image degradations
 
 | Degradation | Parameter | Values |

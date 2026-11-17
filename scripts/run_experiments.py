@@ -1,4 +1,4 @@
-"""Run the classifier on original or degraded test images."""
+"""Run the classifier on original or degraded images."""
 
 import argparse
 from pathlib import Path
@@ -58,17 +58,21 @@ def predict_batch(model, tensors, records) -> list[dict]:
     return results
 
 
-def run_experiments(degraded: bool = False) -> None:
+def run_experiments(degraded: bool = False, split: str = "test") -> None:
     started = perf_counter()
     torch.set_num_threads(4)
     splits = pd.read_csv(PROJECT_ROOT / "data" / "splits.csv")
-    test_images = splits.loc[splits["split"] == "test"].sort_values("image_id")
-    if test_images.empty:
-        raise ValueError("No test images found. Run prepare_data.py first.")
-    if test_images["image_id"].duplicated().any():
-        raise ValueError("Duplicate test image IDs.")
-    if not set(test_images["dx"]).issubset(CLASSES):
-        raise ValueError("Unknown diagnosis in the test image list.")
+    if split not in ("test", "validation"):
+        raise ValueError("Choose the test or validation split.")
+    if (splits.groupby("lesion_id")["split"].nunique() > 1).any():
+        raise ValueError("A lesion appears in more than one split.")
+    selected_images = splits.loc[splits["split"] == split].sort_values("image_id")
+    if selected_images.empty:
+        raise ValueError(f"No {split} images found. Run prepare_data.py first.")
+    if selected_images["image_id"].duplicated().any():
+        raise ValueError("Duplicate image IDs in the selected split.")
+    if not set(selected_images["dx"]).issubset(CLASSES):
+        raise ValueError("Unknown diagnosis in the selected image list.")
     model = load_model()
     preprocess = transforms.Compose([
         transforms.ToTensor(),
@@ -84,14 +88,14 @@ def run_experiments(degraded: bool = False) -> None:
             raise ValueError(f"Duplicate image filename: {path.name}")
         image_paths[path.stem] = path
 
-    rows = list(test_images.itertuples(index=False))
+    rows = list(selected_images.itertuples(index=False))
     results = []
     tensors = []
     records = []
     variants_per_image = sum(map(len, PARAMETER_GRID.values())) if degraded else 1
     total = len(rows) * variants_per_image
     mode = "degraded" if degraded else "original"
-    print(f"Running ResNet18 on {total} {mode} images (CPU)...", flush=True)
+    print(f"Running ResNet18 on {total} {mode} {split} images (CPU)...", flush=True)
     with torch.inference_mode():
         for index, row in enumerate(rows, start=1):
             if row.image_id not in image_paths:
@@ -121,6 +125,8 @@ def run_experiments(degraded: bool = False) -> None:
     output_dir = PROJECT_ROOT / "results"
     output_dir.mkdir(exist_ok=True)
     filename = "degraded_predictions.csv" if degraded else "original_predictions.csv"
+    if split == "validation":
+        filename = f"validation_{filename}"
     output_path = output_dir / filename
     pd.DataFrame(results).to_csv(output_path, index=False, lineterminator="\n")
     elapsed = perf_counter() - started
@@ -131,9 +137,10 @@ def run_experiments(degraded: bool = False) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--degraded", action="store_true", help="Evaluate all degradation levels and calculate SSIM.")
+    parser.add_argument("--split", choices=("test", "validation"), default="test", help="Image split to process (default: test).")
     args = parser.parse_args()
     try:
-        run_experiments(args.degraded)
+        run_experiments(args.degraded, args.split)
     except (OSError, ValueError, RuntimeError, KeyError) as error:
         raise SystemExit(f"Experiment failed: {error}") from error
 
