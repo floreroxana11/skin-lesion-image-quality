@@ -197,6 +197,55 @@ These analysis scripts use saved predictions without running ResNet again.
 The formulas, model settings, and references are in
 [Experimental Methodology](docs/methodology.md).
 
+## Small case study
+
+```powershell
+.\.venv\Scripts\python.exe scripts/case_study.py
+```
+
+This uses the 35 selected validation images and their 700 degraded variants.
+ResNet runs only on the 35 originals; variant predictions are read from the
+saved validation results. Estimators A-E are fitted on the remaining validation
+lesions, excluding all photographs of the example lesions.
+
+Tables and figures are saved in `results/case_study/`. `predictions.csv` lists
+the originals and variants; estimated correctness is provided for the variants.
+`matched_comparison.csv` summarizes the six type comparisons at tolerance 0.01.
+`estimator_training.csv` records the images used to fit the example estimators.
+
+The walkthrough shows the first two matched pairs sorted by image ID where
+only one prediction is correct. Ties are ordered by type pair, then ascending
+parameters. `walkthrough_pairs.csv` records those pairs. The SSIM grid uses the
+first selected image sorted by image ID. These examples are illustrative,
+not representative of the full dataset. This case study is an exploratory
+addition made after the initial test results.
+
+## SSIM thresholds
+
+Generate predictions for the original validation images, then run the analysis:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/run_experiments.py --split validation
+.\.venv\Scripts\python.exe scripts/ssim_thresholds.py
+```
+
+Thresholds are chosen on validation data for an allowed accuracy drop of 2
+percentage points, with 5 points as a second comparison. The script fits
+correctness against SSIM for each degradation type and for all types together.
+It reports `not reached` when the fitted accuracy does not reach the target
+within the observed SSIM range.
+
+The fixed thresholds are evaluated on saved test predictions. Results include
+the accepted fraction, accuracy, and bootstrap intervals for the accuracy drop.
+Original accuracy is reported both for the full test set and for the accepted
+images, counting each original once per accepted variant. Brightness is also
+reported as `brightness_dark` (0.4, 0.7) and `brightness_bright` (1.2, 1.5, 1.8).
+
+`results/thresholds/` contains `validation_thresholds.csv`, `test_evaluation.csv`,
+`policy_comparison.csv`, `iso_ssim_bins.csv`, and `iso_ssim_curves.png`. The curves
+use fixed SSIM bins of width 0.02 from 0.70 to 1.00, keeping bins with at least
+50 variants. This is an exploratory analysis added after the initial test results.
+
 ## Image degradations
 
 | Degradation | Parameter | Values |

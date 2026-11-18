@@ -456,6 +456,95 @@ AP is left undefined if it has no errors. Small classes need careful reading;
 for example, the test split contains only six `df` lesions. No bootstrap
 intervals have been calculated for these class tables, deferral, or E comparisons.
 
+### 8.3. Small validation case study
+
+The case study uses the 35 images in `data/validation_selection.csv`, their
+original predictions, and the 700 saved degraded predictions. Matching follows
+Experiment 2 with tolerance 0.01, covering all six type pairs.
+
+For these examples, estimators A-E are fitted again using validation rows after
+excluding all images of the 35 selected lesions. The estimated probabilities
+are reported for the degraded variants. These separate fits leave the original
+test estimators and their results unchanged.
+
+The walkthrough selects the first two matched pairs sorted by image ID where
+only one side is correct. Ties are resolved by type pair and ascending parameter
+values. The grid shows all 20 variants of the first selected image sorted by
+image ID. The examples illustrate the calculations rather than estimate
+performance for the full dataset. The case study uses validation images to illustrate the methodology. The
+example lesions are excluded when fitting the reliability estimators.
+
+### 8.4. SSIM thresholds by degradation type
+
+This exploratory analysis was added after the initial test results. Threshold
+selection uses validation data only. The classifier is run on the 1,521 original
+validation images to obtain the reference accuracy $Acc_{val,original}$.
+
+For each type $d$, logistic regression estimates correctness from SSIM:
+
+$$
+\widehat r_d(q)=\frac{1}{1+\exp[-(\alpha_d+\beta_d q)]}.
+$$
+
+SSIM is standardized using that group's validation data before fitting, with
+the same logistic regression settings as Experiment 3. The coefficients above
+are expressed on the original SSIM scale. Let $q_{d,min}$ and $q_{d,max}$ be
+the smallest and largest observed validation scores. The selected threshold is
+
+$$
+s_d^*=\min\{q\in[q_{d,min},q_{d,max}]:
+\widehat r_d(q)\geq Acc_{val,original}-\delta\}.
+$$
+
+The main tolerance is $\delta=0.02$, or two percentage points. The analysis is
+repeated with $\delta=0.05$. If the set is empty, the result is `not reached`;
+the fit is not extrapolated beyond the observed range. The threshold is the
+lower endpoint if it already meets the target; otherwise an increasing fit
+is solved for its crossing point. The fitted slope is recorded to check
+whether increasing SSIM corresponds to increasing estimated accuracy.
+
+A single threshold $s_{global}^*$ is selected using the same procedure on all
+validation variants together. Brightness is fitted both as one group and
+separately as darkening (0.4, 0.7) and brightening (1.2, 1.5, 1.8). These
+additional brightness groups are not counted again in the four-type totals.
+
+The thresholds are saved before test predictions are loaded. On test data,
+variants pass a rule when $q\geq s^*$. A `not reached` rule accepts no variants.
+For accepted rows $\mathcal A$, accuracy and coverage are
+
+$$
+Acc_{accepted}=\frac{\sum_{j\in\mathcal A}t_j}{|\mathcal A|},\qquad
+Coverage=\frac{|\mathcal A|}{N},
+$$
+
+where $N$ is the number of available variants in the evaluated group. The
+reported drop is $Acc_{test,original}-Acc_{accepted}$. To check the effect of
+selecting different images, a paired drop is also reported:
+
+$$
+Drop_{paired}=\frac{1}{|\mathcal A|}
+\sum_{j\in\mathcal A}(t_{original,i(j)}-t_j).
+$$
+
+Here $i(j)$ is the source image of variant $j$. Each source original is counted
+once per accepted variant. Accuracy and drops are undefined for an empty
+accepted set. Both drops use 1,000 paired lesion bootstrap repetitions, seed
+42, and percentile intervals, as in Section 7. The full original test set is
+resampled together with its variants. Intervals require at least 900 nonempty
+repetitions; the valid count is recorded. The fitted thresholds stay fixed.
+
+The policy comparison counts accepted variants and degradation groups whose
+observed drop exceeds $\delta$. This is a group-level comparison: it does not
+assign an accuracy drop to individual variants. A fitted validation target is
+not a guarantee of the same accuracy on test data.
+
+For the SSIM curves, fixed bins of width 0.02 cover 0.70 to 1.00. Bins include
+their lower endpoint and exclude the upper, except the last bin includes 1.00.
+Each type and bin reports variant, image, and lesion counts, accuracy, and mean
+confidence. Bins with fewer than 50 variants are omitted. The figure includes
+the original test accuracy as a reference line. Bin edges, tolerances, and model
+settings are fixed without tuning them on these test results.
+
 ## 9. Link to previous studies
 
 Earlier studies examine how image artefacts affect dermatology classifiers

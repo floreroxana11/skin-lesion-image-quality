@@ -1,0 +1,5 @@
+delta,policy,n_accepted_variants,n_groups_exceeding_delta,n_accepted_variants_in_failing_groups,n_groups_exceeding_paired_delta,n_accepted_variants_in_paired_failing_groups,n_groups_without_acceptance
+0.02,global,3290,0,0,0,0,2
+0.02,type_specific,6960,0,0,0,0,1
+0.05,global,9876,0,0,0,0,0
+0.05,type_specific,11496,0,0,0,0,1
