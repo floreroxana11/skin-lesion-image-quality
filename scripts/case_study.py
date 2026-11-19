@@ -13,9 +13,11 @@ from sklearn.exceptions import ConvergenceWarning
 import torch
 from torchvision import transforms
 
-from analyze_results import compare_matched_pairs
+from analyze_results import calculate_metrics, compare_matched_pairs
 from degradations import degrade, prepare_image
-from estimate_reliability import VARIANTS, build_estimator, load_predictions
+from estimate_reliability import (
+    VARIANTS, analyze_deferral, build_estimator, evaluate_reliability, load_predictions,
+)
 from explore_degradations import save_examples
 from run_experiments import BATCH_SIZE, load_model, predict_batch
 
@@ -64,6 +66,36 @@ def estimate_correctness(training: pd.DataFrame, examples: pd.DataFrame) -> pd.D
         index = list(estimator.named_steps["logistic"].classes_).index(1)
         examples[f"probability_correct_{name}"] = estimator.predict_proba(examples)[:, index]
     return examples
+
+
+def summarize_conditions(originals: pd.DataFrame, examples: pd.DataFrame) -> pd.DataFrame:
+    """Experiment 1 on the case-study images: per condition and per degradation type."""
+    rows = [{"degradation": "original", "parameter": float("nan"), "level": "original",
+             **calculate_metrics(originals)[0]}]
+    for (kind, parameter), group in examples.groupby(["degradation", "parameter"], sort=True):
+        rows.append({"degradation": kind, "parameter": parameter, "level": "single",
+                     **calculate_metrics(group)[0]})
+    for kind, group in examples.groupby("degradation", sort=True):
+        rows.append({"degradation": kind, "parameter": float("nan"), "level": "all five",
+                     **calculate_metrics(group)[0]})
+    return pd.DataFrame(rows).rename(columns={"n_images": "n_predictions"})
+
+
+def summarize_reliability(examples: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Experiment 3 on the case-study variants: descriptive, without bootstrap intervals."""
+    correct = examples["correct"].to_numpy()
+    metrics = pd.DataFrame([
+        {
+            "variant": name,
+            "features": " + ".join(settings["numeric"] + (["type"] if settings["use_type"] else [])),
+            "n_variants": len(examples),
+            "error_rate": float(1 - correct.mean()),
+            **evaluate_reliability(correct, examples[f"probability_correct_{name}"].to_numpy()),
+        }
+        for name, settings in VARIANTS.items()
+    ])
+    deferral, _ = analyze_deferral(examples)
+    return metrics, deferral
 
 
 def save_walkthrough(examples: pd.DataFrame, originals: pd.DataFrame, paths: dict,
@@ -154,11 +186,15 @@ def main() -> None:
     ).head(2)
     if len(examples) != 700 or len(summary) != 6:
         raise ValueError("Expected 700 variants and six type comparisons.")
+    conditions = summarize_conditions(originals, examples)
+    reliability, deferral = summarize_reliability(examples)
     output.mkdir(parents=True, exist_ok=True)
     for name, frame in (
         ("predictions.csv", pd.concat([originals, examples], ignore_index=True)),
+        ("conditions.csv", conditions),
         ("matched_pairs.csv", pairs), ("matched_comparison.csv", summary),
         ("walkthrough_pairs.csv", walkthrough),
+        ("reliability.csv", reliability), ("deferral.csv", deferral),
         ("estimator_training.csv", training[["image_id", "lesion_id", "true_label"]].drop_duplicates()),
     ):
         frame.to_csv(output / name, index=False, lineterminator="\n")
@@ -170,7 +206,11 @@ def main() -> None:
                    "accuracy_a", "accuracy_b"]].round(3).to_string(index=False))
     print(f"Estimator fitting: {training['image_id'].nunique()} validation images, "
           f"{training['lesion_id'].nunique()} lesions.")
-    print("Saved: results/case_study/ (five CSV tables and two figures)")
+    print(conditions[["degradation", "parameter", "level", "accuracy", "balanced_accuracy",
+                      "mean_confidence", "ece"]].round(3).to_string(index=False))
+    print(reliability[["variant", "features", "error_auroc", "error_average_precision",
+                       "brier_score"]].round(4).to_string(index=False))
+    print("Saved: results/case_study/ (eight CSV tables and two figures)")
     print(f"Elapsed time: {perf_counter() - started:.1f} seconds")
 
 

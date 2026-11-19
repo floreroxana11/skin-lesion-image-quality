@@ -210,7 +210,11 @@ lesions, excluding all photographs of the example lesions.
 
 Tables and figures are saved in `results/case_study/`. `predictions.csv` lists
 the originals and variants; estimated correctness is provided for the variants.
+`conditions.csv` gives the Experiment 1 metrics for the originals, each of the
+20 conditions, and each degradation type.
 `matched_comparison.csv` summarizes the six type comparisons at tolerance 0.01.
+`reliability.csv` and `deferral.csv` give the Experiment 3 results for
+estimators A-E on the 700 variants.
 `estimator_training.csv` records the images used to fit the example estimators.
 
 The walkthrough shows the first two matched pairs sorted by image ID where
@@ -267,3 +271,14 @@ additional comparison. SSIM measures similarity, not diagnostic correctness.
 
 Reference: Wang, Z., Bovik, A. C., Sheikh, H. R., & Simoncelli, E. P. (2004).
 [Image Quality Assessment: From Error Visibility to Structural Similarity](https://doi.org/10.1109/TIP.2003.819861).
+
+## Report
+
+The Lab 5-8 report is available in [Word](docs/report.docx) and
+[Markdown](docs/report.md). It includes the experimental methodology, the case
+study on 35 validation images, and related work.
+
+The full test-set results (`results/analysis/`, `results/reliability/`,
+`results/bootstrap/`, `results/thresholds/`) were generated as preparation for
+validation on the complete dataset. They will be discussed in the next stage of
+the report.
